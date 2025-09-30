@@ -6,9 +6,11 @@ import org.example.operations.ConsoleOperationType;
 import org.example.operations.OperationCommandProcessor;
 import org.example.user.User;
 import org.example.user.UserService;
+import org.springframework.stereotype.Component;
 
 import java.util.Scanner;
 
+@Component
 public class CloseAccountProcessor implements OperationCommandProcessor {
 
     private final Scanner scanner;
@@ -27,7 +29,7 @@ public class CloseAccountProcessor implements OperationCommandProcessor {
         int accountId = scanner.nextInt();
         Account account = accountService.closeAccount(accountId);
         User user = userService.findUserById(account.getUserId())
-                .orElseThrow(() -> new IllegalStateException("User not found with id=s".formatted(account.getUserId())) );
+                .orElseThrow(() -> new IllegalStateException("User not found with id=s".formatted(account.getUserId())));
         user.getAccountList().remove(account);
         System.out.println("Account successfully closed with id=s%n".formatted(accountId));
     }
