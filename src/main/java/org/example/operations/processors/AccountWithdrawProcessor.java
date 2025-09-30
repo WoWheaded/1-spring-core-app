@@ -3,9 +3,11 @@ package org.example.operations.processors;
 import org.example.account.AccountService;
 import org.example.operations.ConsoleOperationType;
 import org.example.operations.OperationCommandProcessor;
+import org.springframework.stereotype.Component;
 
 import java.util.Scanner;
 
+@Component
 public class AccountWithdrawProcessor implements OperationCommandProcessor {
 
     private final Scanner scanner;

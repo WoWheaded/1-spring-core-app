@@ -4,9 +4,11 @@ import org.example.account.AccountService;
 import org.example.operations.ConsoleOperationType;
 import org.example.operations.OperationCommandProcessor;
 import org.example.user.UserService;
+import org.springframework.stereotype.Component;
 
 import java.util.Scanner;
 
+@Component
 public class CreateAccountProcessor implements OperationCommandProcessor {
     private final UserService userService;
     private final AccountService accountService;
