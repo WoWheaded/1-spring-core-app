@@ -21,9 +21,9 @@ public class DepositAccountProcessor implements OperationCommandProcessor {
     @Override
     public void processOperation() {
         System.out.println("Enter account id: ");
-        int accountId = scanner.nextInt();
+        Long accountId = Long.parseLong(scanner.nextLine());
         System.out.println("Enter amount to deposit: ");
-        int amountToDeposit = scanner.nextInt();
+        int amountToDeposit = Integer.parseInt(scanner.nextLine());
         accountService.depositAccount(accountId, amountToDeposit);
         System.out.printf("Account deposited successfully! amount=%s to accountId=%s%n",
                 amountToDeposit, accountId);

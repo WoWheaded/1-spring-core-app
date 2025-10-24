@@ -25,7 +25,6 @@ public class CreateUserProcessor implements OperationCommandProcessor {
         String userLogin = scanner.nextLine();
         User user = userService.createUser(userLogin);
         System.out.println("User created: " + user.toString());
-
     }
 
     @Override

@@ -33,7 +33,7 @@ public class OperationConsoleListener {
 
     public void listenUpdates() {
         while (!Thread.currentThread().isInterrupted()) {
-            var operationType = listenNextOperation();
+            ConsoleOperationType operationType = listenNextOperation();
             if (operationType == null) {
                 return;
             }
@@ -54,7 +54,7 @@ public class OperationConsoleListener {
         printAllAvailableOperations();
         System.out.println();
         while (!Thread.currentThread().isInterrupted()) {
-            var operationType = scanner.nextLine();
+            String operationType = scanner.nextLine();
             try {
                 return ConsoleOperationType.valueOf(operationType.toUpperCase());
             } catch (IllegalArgumentException e) {
@@ -72,7 +72,7 @@ public class OperationConsoleListener {
 
     private void processNextOperation(ConsoleOperationType operation) {
         try {
-            var processor = processMap.get(operation);
+            OperationCommandProcessor processor = processMap.get(operation);
             processor.processOperation();
         } catch (Exception e) {
             System.out.printf("Error executing current operation: %s", e.getMessage());
