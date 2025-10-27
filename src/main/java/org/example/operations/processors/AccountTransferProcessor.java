@@ -21,15 +21,14 @@ public class AccountTransferProcessor implements OperationCommandProcessor {
     @Override
     public void processOperation() {
         System.out.println("Enter source account id: ");
-        int fromAccountId = scanner.nextInt();
+        Long fromAccountId = Long.parseLong(scanner.nextLine());
         System.out.println("Enter destination account id: ");
-        int toAccountId = scanner.nextInt();
+        Long toAccountId = Long.parseLong(scanner.nextLine());
         System.out.println("Enter amount to transfer: ");
         int amountToTransfer = scanner.nextInt();
 
         accountService.transfer(fromAccountId, toAccountId, amountToTransfer);
-        System.out.println("Transfer %s successful from account=%s to account=%s"
-                .formatted(amountToTransfer, fromAccountId, toAccountId));
+        System.out.printf("Transfer %s successful from account=%s to account=%s%n", amountToTransfer, fromAccountId, toAccountId);
     }
 
     @Override

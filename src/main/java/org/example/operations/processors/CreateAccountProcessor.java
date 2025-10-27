@@ -1,8 +1,10 @@
 package org.example.operations.processors;
 
+import org.example.account.Account;
 import org.example.account.AccountService;
 import org.example.operations.ConsoleOperationType;
 import org.example.operations.OperationCommandProcessor;
+import org.example.user.User;
 import org.example.user.UserService;
 import org.springframework.stereotype.Component;
 
@@ -23,15 +25,14 @@ public class CreateAccountProcessor implements OperationCommandProcessor {
     @Override
     public void processOperation() {
         System.out.println("Enter user id to create account: ");
-        int userID = Integer.parseInt(scanner.nextLine());
-        var user = userService.findUserById(userID)
-                .orElseThrow(() -> new IllegalArgumentException("Invalid user id " + userID));
+        Long accountId = Long.parseLong(scanner.nextLine());
+        User user = userService.findUserById(accountId)
+                .orElseThrow(() -> new IllegalArgumentException("Invalid user id " + accountId));
 
-        var account = accountService.createAccount(user);
+        Account account = accountService.createAccount(user);
         user.getAccountList().add(account);
 
-        System.out.printf("Account created with id: %s for user %s %n", account.getId(), user.getLogin());
-
+        System.out.printf("Account created with id: %s for user %s %n", account.getUser().getId(), user.getLogin());
     }
 
     @Override

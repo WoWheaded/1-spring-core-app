@@ -1,106 +1,114 @@
 package org.example.account;
 
+import org.example.hibernate.TransactionHelper;
 import org.example.user.User;
+import org.hibernate.SessionFactory;
 import org.springframework.stereotype.Service;
 
-import java.util.HashMap;
 import java.util.List;
-import java.util.Map;
+import java.util.Objects;
 import java.util.Optional;
 
 @Service
 public class AccountService {
 
-    private final Map<Integer, Account> accountMap;
-    private int idCounter;
     private final AccountProperties accountProperties;
+    private final SessionFactory sessionFactory;
+    private final TransactionHelper transactionHelper;
 
-    public AccountService(AccountProperties accountProperties) {
+    public AccountService(AccountProperties accountProperties, SessionFactory sessionFactory, TransactionHelper transactionHelper) {
         this.accountProperties = accountProperties;
-        this.accountMap = new HashMap<>();
-        this.idCounter = 0;
+        this.sessionFactory = sessionFactory;
+        this.transactionHelper = transactionHelper;
     }
 
 
     public Account createAccount(User user) {
-        idCounter++;
-        Account account = new Account(idCounter, user.getId(), accountProperties.getDefaultAccountAmount());
-        accountMap.put(account.getId(), account);
-        return account;
+        return transactionHelper.executeInTransaction(() -> {
+            Account account = new Account(null, user, accountProperties.getDefaultAccountAmount());
+            sessionFactory.getCurrentSession().persist(account);
+            return account;
+        });
     }
 
-    public Optional<Account> findAccountById(int id) {
-        return Optional.ofNullable(accountMap.get(id));
+    public Optional<Account> findAccountById(Long id) {
+        Account account = sessionFactory.getCurrentSession().get(Account.class, id);
+        return Optional.ofNullable(account);
     }
 
-    public List<Account> findAllUserAccounts(int userId) {
-        return accountMap.values().stream()
-                .filter(account -> account.getUserId() == userId)
-                .toList();
+    public void depositAccount(Long id, int amount) {
+        transactionHelper.executeInTransaction(() -> {
+            Account account = findAccountById(id)
+                    .orElseThrow(() -> new IllegalArgumentException("Account with id " + id + " not found"));
+            if (amount <= 0) {
+                throw new IllegalArgumentException("Amount must be greater than 0. amount: %s".formatted(amount));
+            }
+            account.setMoneyAmount(account.getMoneyAmount() + amount);
+            return 0;
+        });
     }
 
-    public void depositAccount(int id, int amount) {
-        var account = findAccountById(id)
-                .orElseThrow(() -> new IllegalArgumentException("Account with id " + id + " not found"));
-        if (amount <= 0) {
-            throw new IllegalArgumentException("Amount must be greater than 0. amount: %s".formatted(amount));
-        }
+    public void withdrawFromAccount(Long accountId, int amountToWithdraw) {
+        transactionHelper.executeInTransaction(() -> {
+            Account account = findAccountById(accountId)
+                    .orElseThrow(() -> new IllegalArgumentException("Cannot withdraw not positive amount: amount=%s"
+                            .formatted(amountToWithdraw)));
 
-        account.setMoneyAmount(account.getMoneyAmount() + amount);
+            if (amountToWithdraw <= 0) {
+                throw new IllegalArgumentException("Amount must be greater than 0. amount: %s"
+                        .formatted(amountToWithdraw));
+            }
+            if (account.getMoneyAmount() < amountToWithdraw) {
+                throw new IllegalArgumentException("Cannot withdraw from account: id=%s, moneyAmount=%s, attemptedWithdraw=%s"
+                        .formatted(account.getId(), account.getMoneyAmount(), amountToWithdraw));
+            }
+            account.setMoneyAmount(account.getMoneyAmount() - amountToWithdraw);
+            return 0;
+        });
     }
 
-    public void withdrawFromAccount(int accountId, int amountToWithdraw) {
-        var account = findAccountById(accountId)
-                .orElseThrow(() -> new IllegalArgumentException("Cannot withdraw not positive amount: amount=%s"
-                        .formatted(amountToWithdraw)));
+    public Account closeAccount(Long accountId) {
+        return transactionHelper.executeInTransaction(() -> {
+            Account accountToRemove = findAccountById(accountId)
+                    .orElseThrow(() -> new IllegalArgumentException("Account with id=%s not found".formatted(accountId)));
+            List<Account> accountList = accountToRemove.getUser().getAccountList();
+            if (accountList.size() == 1) {
+                throw new IllegalStateException("Cannot close the only one account");
+            }
 
-        if (amountToWithdraw <= 0) {
-            throw new IllegalArgumentException("Amount must be greater than 0. amount: %s"
-                    .formatted(amountToWithdraw));
-        }
-        if (account.getMoneyAmount() < amountToWithdraw) {
-            throw new IllegalArgumentException("Cannot withdraw from account: id=%s, moneyAmount=%s, attemptedWithdraw=%s"
-                    .formatted(account.getId(), account.getMoneyAmount(), amountToWithdraw));
-        }
+            Account accountToDeposit = accountList.stream()
+                    .filter(it -> !Objects.equals(it.getId(), accountId))
+                    .findFirst()
+                    .orElseThrow(() -> new IllegalStateException("Account with id=%s not found".formatted(accountId)));
 
-        account.setMoneyAmount(account.getMoneyAmount() - amountToWithdraw);
+            accountToDeposit.setMoneyAmount(accountToDeposit.getMoneyAmount() + accountToRemove.getMoneyAmount());
+            sessionFactory.getCurrentSession().remove(accountToRemove);
+            return accountToRemove;
+        });
     }
 
-    public Account closeAccount(int id) {
-        var accountToRemove = findAccountById(id)
-                .orElseThrow(() -> new IllegalArgumentException("Account with id=%s not found".formatted(id)));
-        List<Account> accountList = findAllUserAccounts(accountToRemove.getUserId());
-        if (accountList.size() == 1) {
-            throw new IllegalStateException("Cannot close the only one account");
-        }
-        Account accountToDeposit = accountList.stream()
-                .filter(it -> it.getId() != id)
-                .findFirst()
-                .orElseThrow(() -> new IllegalStateException("Account with id=%s not found".formatted(id)));
-        accountToDeposit.setMoneyAmount(accountToDeposit.getMoneyAmount() + accountToRemove.getMoneyAmount());
-        accountMap.remove(id);
-        return accountToRemove;
-    }
-
-    public void transfer(int fromAccountId, int toAccountId, int amountToTransfer) {
-        var accountFrom = findAccountById(fromAccountId)
-                .orElseThrow(() -> new IllegalArgumentException("Account with id=%s not found".formatted(fromAccountId)));
-        var accountTo = findAccountById(toAccountId)
-                .orElseThrow(() -> new IllegalArgumentException("Account with id=%s not found".formatted(toAccountId)));
+    public void transfer(Long fromAccountId, Long toAccountId, int amountToTransfer) {
         if (amountToTransfer <= 0) {
             throw new IllegalArgumentException("Cannot transfer not positive amount. amount: %s"
                     .formatted(amountToTransfer));
         }
+        transactionHelper.executeInTransaction(() -> {
+            Account accountFrom = findAccountById(fromAccountId)
+                    .orElseThrow(() -> new IllegalArgumentException("Account with id=%s not found".formatted(fromAccountId)));
+            Account accountTo = findAccountById(toAccountId)
+                    .orElseThrow(() -> new IllegalArgumentException("Account with id=%s not found".formatted(toAccountId)));
 
-        if (accountFrom.getMoneyAmount() < amountToTransfer) {
-            throw new IllegalArgumentException("Cannot transfer from account: id=%s, moneyAmount=%s, attemptedTransfer=%s"
-                    .formatted(fromAccountId, accountFrom.getMoneyAmount(), amountToTransfer));
-        }
+            if (accountFrom.getMoneyAmount() < amountToTransfer) {
+                throw new IllegalArgumentException("Cannot transfer from account: id=%s, moneyAmount=%s, attemptedTransfer=%s"
+                        .formatted(fromAccountId, accountFrom.getMoneyAmount(), amountToTransfer));
+            }
 
-        int totalAmountToDeposit = accountTo.getUserId() != accountFrom.getUserId()
-                ? (int) (amountToTransfer - amountToTransfer * accountProperties.getTransferCommission())
-                : amountToTransfer;
-        accountFrom.setMoneyAmount(accountFrom.getMoneyAmount() - amountToTransfer);
-        accountTo.setMoneyAmount(accountTo.getMoneyAmount() + totalAmountToDeposit);
+            int totalAmountToDeposit = !accountTo.getUser().getId().equals(accountFrom.getUser().getId())
+                    ? (int) (amountToTransfer * (1 - accountProperties.getTransferCommission()))
+                    : amountToTransfer;
+            accountFrom.setMoneyAmount(accountFrom.getMoneyAmount() - amountToTransfer);
+            accountTo.setMoneyAmount(accountTo.getMoneyAmount() + totalAmountToDeposit);
+            return 0;
+        });
     }
 }
